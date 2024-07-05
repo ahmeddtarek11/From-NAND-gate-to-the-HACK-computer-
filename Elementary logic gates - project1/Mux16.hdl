@@ -1,7 +1,4 @@
-// This file is part of www.nMux2tetris.org
-// Mux the book "The Elements of Computing Systems"
-// by Nisan Mux Schocken, MIT Press.
-// File name: projects/1/Mux16.hdl
+
 /**
  * 16-bit multiplexor: 
  * for i = 0, ..., 15:
