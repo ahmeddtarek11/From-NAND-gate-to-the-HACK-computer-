@@ -1,0 +1,70 @@
+
+/**
+ * The Hack Central Processing unit (CPU).
+ * Parses the binary code in the instruction input and executes it according to the
+ * Hack machine language specification. In the case of a C-instruction, computes the
+ * function specified by the instruction. If the instruction specifies to read a memory
+ * value, the inM input is expected to contain this value. If the instruction specifies
+ * to write a value to the memory, sets the outM output to this value, sets the addressM
+ * output to the target address, and asserts the writeM output (when writeM = 0, any
+ * value may appear in outM).
+ * If the reset input is 0, computes the address of the next instruction and sets the
+ * pc output to that value. If the reset input is 1, sets pc to 0.
+ * Note: The outM and writeM outputs are combinational: they are affected by the
+ * instruction's execution during the current cycle. The addressM and pc outputs are
+ * clocked: although they are affected by the instruction's execution, they commit to
+ * their new values only in the next cycle.
+ */
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+            
+    Mux16(a=instruction,b=aluOut,sel=instruction[15],out=muxOut); // output to a register
+    //negating the opcode and Aregister control bit then anding them togahter to make sure the first is 0 and second is 1 
+    Not(in=instruction[15],out=notBit15);
+    Or(a=notBit15, b=instruction[5], out=AregInput);
+    ARegister(in=muxOut, load=AregInput,out=Aout ); // Aregister
+
+    //addressM is the selected address which is A register, so we don't change A register address we just output it as it is 
+    And16(a=Aout, b=true, out[0..14]=addressM);
+
+    //mux choose between A register and M register depending on instruction 12th bit 'a'
+    Mux16(a=Aout, b=inM, sel=instruction[12], out=mux2out); // output to alu y
+
+    //checking if both control bits are 1 to choose writing or reading from the D register 
+    And(a=instruction[4], b=instruction[15], out=DLoadBit);
+    DRegister(in=aluOut, load=DLoadBit, out=Dout); //d register, output to alu x 
+
+
+    And(a=instruction[3], b=instruction[15], out=writeM); //handling writeM output 
+
+    
+    ALU(x=Dout, y=mux2out, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=outM,out=aluOut,zr=zrout, ng=ngout);
+
+
+
+    And(a=instruction[1], b=zrout, out=JEQ);
+    And(a=instruction[2], b=ngout, out=JLT);
+
+    Or(a=zrout, b=ngout, out=neg);
+    Not(in=neg, out=positive);
+    And(a=instruction[0], b=positive, out=JGT);
+
+    Or8Way(in[0]=JGT,in[1]=JEQ,in[2]=JLT,in[3..7]=false,out=Jump1);
+    And(a=Jump1,b=instruction[15],out=Jump);
+
+    PC(in=Aout,load=Jump,inc=true,reset=reset,out[0..14]=pc);
+
+
+}
